@@ -1,1 +1,20 @@
 @import "tailwindcss";
+/* .shadow-text {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .bg-gradient-to-r {
+    background: linear-gradient(to right, #1e3a8a, #1f2937);
+  }
+  
+  .badge {
+    display: inline-block;
+    padding: 0.5em 1em;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+  }
+  
+  button:hover {
+    transform: scale(1.05);
+    transition: transform 0.2s ease-in-out;
+  } */
