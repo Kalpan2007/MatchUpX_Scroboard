@@ -98,7 +98,7 @@ router.patch('/matches/:id', async (req, res) => {
   }
 });
 
-// Set or update players (bowler → striker → non-striker workflow)
+// Set or update players (flexible selection: striker, bowler, or non-striker in any order)
 router.post('/matches/:id/setPlayers', async (req, res) => {
   console.log('Set Players request:', req.body);
   try {
@@ -116,25 +116,9 @@ router.post('/matches/:id/setPlayers', async (req, res) => {
 
     let strikerPlayer, nonStrikerPlayer, bowlerPlayer;
 
-    // Initial setup or bowler update (bowler must be set first)
-    if (bowler) {
-      if (!bowler.trim()) return res.status(400).json({ error: 'Bowler name cannot be empty' });
-      bowlerPlayer = bowlingTeam.find(p => p.name.toLowerCase() === bowler.toLowerCase().trim());
-      if (!bowlerPlayer) return res.status(400).json({ error: `Bowler '${bowler}' not found in ${bowlingTeam.map(p => p.name).join(', ')}` });
-      match.currentBowler = {
-        name: bowlerPlayer.name,
-        overs: 0,
-        runs: 0,
-        wickets: 0,
-      };
-    } else if (!match.currentBowler) {
-      return res.status(400).json({ error: 'Bowler must be specified before striker or non-striker' });
-    }
-
-    // Striker update (after bowler is set, initial or after wicket)
+    // Update striker (can be set independently, initial or after wicket)
     if (striker) {
       if (!striker.trim()) return res.status(400).json({ error: 'Striker name cannot be empty' });
-      if (!match.currentBowler) return res.status(400).json({ error: 'Bowler must be set before setting striker' });
       strikerPlayer = battingTeam.find(p => p.name.toLowerCase() === striker.toLowerCase().trim());
       if (!strikerPlayer) return res.status(400).json({ error: `Striker '${striker}' not found in ${battingTeam.map(p => p.name).join(', ')}` });
       match.currentBatsmen.striker = {
@@ -145,15 +129,30 @@ router.post('/matches/:id/setPlayers', async (req, res) => {
         sixes: 0,
         out: false,
       };
-    } else if (!match.currentBatsmen?.striker) {
-      return res.status(400).json({ error: 'Striker must be specified before non-striker' });
+      // Reset non-striker if out or not set, but allow independent setting
+      if (match.currentBatsmen.nonStriker?.out || !match.currentBatsmen.nonStriker) {
+        match.currentBatsmen.nonStriker = null;
+      }
     }
 
-    // Non-striker update (after bowler and striker are set, initial only)
+    // Update bowler (can be set independently, initial or after over/wicket)
+    if (bowler) {
+      if (!bowler.trim()) return res.status(400).json({ error: 'Bowler name cannot be empty' });
+      bowlerPlayer = bowlingTeam.find(p => p.name.toLowerCase() === bowler.toLowerCase().trim());
+      if (!bowlerPlayer) return res.status(400).json({ error: `Bowler '${bowler}' not found in ${bowlingTeam.map(p => p.name).join(', ')}` });
+      match.currentBowler = {
+        name: bowlerPlayer.name,
+        overs: 0,
+        runs: 0,
+        wickets: 0,
+      };
+    }
+
+    // Update non-striker (can be set independently, but must ensure valid state)
     if (nonStriker) {
       if (!nonStriker.trim()) return res.status(400).json({ error: 'Non-striker name cannot be empty' });
-      if (!match.currentBowler || !match.currentBatsmen?.striker) {
-        return res.status(400).json({ error: 'Bowler and striker must be set before setting non-striker' });
+      if (!match.currentBatsmen?.striker) {
+        return res.status(400).json({ error: 'Striker must be set before non-striker' });
       }
       nonStrikerPlayer = battingTeam.find(p => p.name.toLowerCase() === nonStriker.toLowerCase().trim() && p.name.toLowerCase() !== match.currentBatsmen.striker.name.toLowerCase());
       if (!nonStrikerPlayer) return res.status(400).json({ error: `Non-striker '${nonStriker}' not found in ${battingTeam.map(p => p.name).join(', ')} or conflicts with striker` });
@@ -168,8 +167,8 @@ router.post('/matches/:id/setPlayers', async (req, res) => {
     }
 
     // Ensure at least one field is provided
-    if (!striker && !nonStriker && !bowler) {
-      return res.status(400).json({ error: 'At least one player (bowler, striker, or non-striker) must be specified' });
+    if (!striker && !bowler && !nonStriker) {
+      return res.status(400).json({ error: 'At least one player (striker, bowler, or non-striker) must be specified' });
     }
 
     await match.save();
@@ -181,7 +180,7 @@ router.post('/matches/:id/setPlayers', async (req, res) => {
   }
 });
 
-// Update score with cricket logic, starting from 0-0, with over starting at 1.1
+// Update score with cricket logic, starting from 0-0, with over starting at 1.0
 router.post('/matches/:id/update', async (req, res) => {
   console.log('POST /api/matches/:id/update called with body:', req.body);
   try {
@@ -191,14 +190,15 @@ router.post('/matches/:id/update', async (req, res) => {
     if (!match) return res.status(404).json({ error: 'Match not found' });
 
     const ballCount = match.ballByBall.length;
-    const currentOver = Math.floor(ballCount / 6) + 1; // Start over at 1 for first ball
-    const currentBall = (ballCount % 6) + 1; // Start ball at 1 for first ball
-    const overString = `${currentOver}.${currentBall}`; // Format as X.Y, e.g., 1.1 for first ball
+    const currentOver = Math.floor(ballCount / 6) + 1;
+    const currentBall = ballCount % 6 || (ballCount === 0 ? 0 : 1);
+    const overString = ballCount === 0 ? '1.0' : `${currentOver}.${currentBall}`;
 
     const battingTeamKey = match.currentBattingTeam === 'team1' ? 'team1' : 'team2';
     const bowlingTeamKey = battingTeamKey === 'team1' ? 'team2' : 'team1';
+    const battingTeam = match.currentBattingTeam === 'team1' ? match.team1 : match.team2; // Define battingTeam
 
-    if (!event || !event.trim()) {
+    if (!event) {
       return res.status(400).json({ error: 'Event is required and cannot be empty' });
     }
 
@@ -212,29 +212,26 @@ router.post('/matches/:id/update', async (req, res) => {
       bowler: bowler || match.currentBowler?.name || '',
       wicketType: wicketType || null,
       runsOnWicket: runsOnWicket || 0,
-      extraRuns: event === 'Wide' || event === 'No Ball' ? 1 + (additionalRuns || 0) : 0,
+      extraRuns: (event === 'Wide' || event === 'No Ball') ? 1 + (additionalRuns || 0) : 0,
       additionalRuns: additionalRuns || 0,
     };
 
-    if (!match.currentBatsmen.striker || !match.currentBowler) {
-      return res.status(400).json({ error: 'Striker or bowler not set' });
+    if (!match.currentBatsmen.striker || !match.currentBowler || !match.currentBatsmen.nonStriker) {
+      return res.status(400).json({ error: 'Striker, bowler, and non-striker must be set' });
     }
-
-    const battingTeam = match.currentBattingTeam === 'team1' ? match.team1.players : match.team2.players;
-    const bowlingTeam = match.currentBattingTeam === 'team1' ? match.team2.players : match.team1.players;
 
     const strikerPlayer = match.currentBatsmen.striker;
+    const nonStrikerPlayer = match.currentBatsmen.nonStriker;
     const bowlerPlayer = match.currentBowler;
 
-    if (!strikerPlayer.name || !bowlerPlayer.name) {
-      return res.status(400).json({ error: `Striker or bowler not found in current match state` });
+    if (!strikerPlayer.name || !bowlerPlayer.name || !nonStrikerPlayer.name) {
+      return res.status(400).json({ error: 'Striker, bowler, or non-striker not found in current match state' });
     }
 
-    // Update match state based on event, starting from 0-0
     if (!isNaN(parseInt(event))) { // Runs (1, 2, 3, 4, 6)
       const runs = parseInt(event);
       match.score[battingTeamKey].runs += runs;
-      match.score[battingTeamKey].overs += 1 / 6; // Increment by 0.1667 per ball
+      match.score[battingTeamKey].overs += 1 / 6;
       match.currentPartnership.runs += runs;
       match.currentPartnership.balls += 1;
 
@@ -246,8 +243,7 @@ router.post('/matches/:id/update', async (req, res) => {
       bowlerPlayer.overs += 1 / 6;
       bowlerPlayer.runs += runs;
 
-      // Rotate strike based on runs (odd/even)
-      if (runs % 2 === 1) { // Odd runs (1, 3) change strike
+      if (runs % 2 === 1) {
         [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
           match.currentBatsmen.nonStriker,
           match.currentBatsmen.striker,
@@ -256,17 +252,21 @@ router.post('/matches/:id/update', async (req, res) => {
     } else if (event === 'Wide' || event === 'No Ball') { // Extras
       const totalRuns = 1 + (additionalRuns || 0);
       match.score[battingTeamKey].runs += totalRuns;
-      match.score[battingTeamKey].overs += 0.1 / 6; // Increment minimally for extras
+      if (additionalRuns === 4 || additionalRuns === 6) {
+        match.score[battingTeamKey].overs += 1 / 6;
+        match.currentPartnership.balls += 1;
+        strikerPlayer.balls += 1;
+        if (additionalRuns === 4) strikerPlayer.fours += 1;
+        if (additionalRuns === 6) strikerPlayer.sixes += 1;
+      }
       bowlerPlayer.runs += totalRuns;
       ballEvent.extraRuns = totalRuns;
-      if (additionalRuns) {
-        strikerPlayer.runs += additionalRuns;
-        if (additionalRuns % 2 === 1) {
-          [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
-            match.currentBatsmen.nonStriker,
-            match.currentBatsmen.striker,
-          ];
-        }
+
+      if (additionalRuns && additionalRuns % 2 === 1) {
+        [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
+          match.currentBatsmen.nonStriker,
+          match.currentBatsmen.striker,
+        ];
       }
     } else if (event === 'Wicket') { // Wicket
       match.score[battingTeamKey].wickets += 1;
@@ -287,26 +287,15 @@ router.post('/matches/:id/update', async (req, res) => {
         strikerPlayer.runs += runsOnWicket || 0;
       }
 
-      match.currentBatsmen.striker = null; // Prompt for new striker in frontend
-      match.currentBowler = null; // Reset bowler after wicket, prompting for new bowler first
+      match.currentBatsmen.striker = null;
     }
 
-    // Check over completion (6 balls)
     if (currentBall === 6) {
-      match.currentBowler = null; // Reset bowler for next over
-      // Rotate strike at the end of the over (switch striker and non-striker)
-      if (match.currentBatsmen.striker && match.currentBatsmen.nonStriker) {
-        [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
-          match.currentBatsmen.nonStriker,
-          match.currentBatsmen.striker,
-        ];
-      }
+      match.currentBowler = null;
     }
 
-    // Check match outcome (simplified for brevity, expand as needed)
-    const totalOvers = match.overs * 6; // Total balls (e.g., 20 overs = 120 balls)
-    if (match.score[battingTeamKey].overs >= totalOvers || match.score[battingTeamKey].wickets === battingTeam.length) {
-      // End of innings or all out
+    const totalOvers = match.overs * 6;
+    if (match.score[battingTeamKey].overs >= totalOvers || match.score[battingTeamKey].wickets === battingTeam.players.length) {
       match.status = 'completed';
       await match.save();
       req.io.emit('scoreUpdate', { ...match.toJSON(), status: 'completed' });
@@ -382,17 +371,15 @@ router.delete('/matches/:id/ball', async (req, res) => {
 
       match.currentBatsmen.striker = match.currentBatsmen.striker || null;
       match.currentBowler = match.currentBowler || null;
+      match.currentBatsmen.nonStriker = match.currentBatsmen.nonStriker || null;
     }
 
     // Adjust over if needed after undo
     if (match.ballByBall.length % 6 === 0 && match.ballByBall.length > 0) {
       match.currentBowler = null; // Reset bowler if undoing last ball of over
-      if (match.currentBatsmen.striker && match.currentBatsmen.nonStriker) {
-        [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
-          match.currentBatsmen.nonStriker,
-          match.currentBatsmen.striker,
-        ];
-      }
+      // Do not reset striker or non-striker here; they change only after wickets or manually
+    } else if (match.ballByBall.length === 0) {
+      match.score[battingTeamKey].overs = 0; // Reset overs to 0 if no balls remain
     }
 
     await match.save();
@@ -504,4 +491,4 @@ router.post('/matches/resetAll', async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;    
