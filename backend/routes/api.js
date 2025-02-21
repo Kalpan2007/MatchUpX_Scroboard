@@ -189,18 +189,19 @@ router.post('/matches/:id/update', async (req, res) => {
 
     if (!match) return res.status(404).json({ error: 'Match not found' });
 
+    const battingTeamKey = match.currentBattingTeam === 'team1' ? 'team1' : 'team2';
+    const bowlingTeamKey = battingTeamKey === 'team1' ? 'team2' : 'team1';
+    const battingTeam = match.currentBattingTeam === 'team1' ? match.team1 : match.team2;
+    const bowlingTeam = match.currentBattingTeam === 'team1' ? match.team2 : match.team1;
+
+    if (!event || typeof event !== 'string' || event.trim() === '') {
+      return res.status(400).json({ error: 'Event is required and must be a non-empty string' });
+    }
+
     const ballCount = match.ballByBall.length;
     const currentOver = Math.floor(ballCount / 6) + 1;
     const currentBall = ballCount % 6 || (ballCount === 0 ? 0 : 1);
     const overString = ballCount === 0 ? '1.0' : `${currentOver}.${currentBall}`;
-
-    const battingTeamKey = match.currentBattingTeam === 'team1' ? 'team1' : 'team2';
-    const bowlingTeamKey = battingTeamKey === 'team1' ? 'team2' : 'team1';
-    const battingTeam = match.currentBattingTeam === 'team1' ? match.team1 : match.team2; // Define battingTeam
-
-    if (!event) {
-      return res.status(400).json({ error: 'Event is required and cannot be empty' });
-    }
 
     let ballEvent = {
       over: currentOver,
@@ -212,11 +213,11 @@ router.post('/matches/:id/update', async (req, res) => {
       bowler: bowler || match.currentBowler?.name || '',
       wicketType: wicketType || null,
       runsOnWicket: runsOnWicket || 0,
-      extraRuns: (event === 'Wide' || event === 'No Ball') ? 1 + (additionalRuns || 0) : 0,
+      extraRuns: (event === 'Wide' || event === 'No Ball') ? 1 : 0,
       additionalRuns: additionalRuns || 0,
     };
 
-    if (!match.currentBatsmen.striker || !match.currentBowler || !match.currentBatsmen.nonStriker) {
+    if (!match.currentBatsmen?.striker || !match.currentBowler || !match.currentBatsmen?.nonStriker) {
       return res.status(400).json({ error: 'Striker, bowler, and non-striker must be set' });
     }
 
@@ -227,6 +228,9 @@ router.post('/matches/:id/update', async (req, res) => {
     if (!strikerPlayer.name || !bowlerPlayer.name || !nonStrikerPlayer.name) {
       return res.status(400).json({ error: 'Striker, bowler, or non-striker not found in current match state' });
     }
+
+    // Track legal deliveries separately
+    let legalDeliveries = match.ballByBall.filter(b => !['Wide', 'No Ball'].includes(b.event)).length;
 
     if (!isNaN(parseInt(event))) { // Runs (1, 2, 3, 4, 6)
       const runs = parseInt(event);
@@ -249,25 +253,47 @@ router.post('/matches/:id/update', async (req, res) => {
           match.currentBatsmen.striker,
         ];
       }
-    } else if (event === 'Wide' || event === 'No Ball') { // Extras
-      const totalRuns = 1 + (additionalRuns || 0);
-      match.score[battingTeamKey].runs += totalRuns;
-      if (additionalRuns === 4 || additionalRuns === 6) {
-        match.score[battingTeamKey].overs += 1 / 6;
-        match.currentPartnership.balls += 1;
-        strikerPlayer.balls += 1;
+      legalDeliveries += 1; // Count as legal delivery
+    } else if (event === 'Wide') { // Wide
+      match.score[battingTeamKey].runs += 1; // Base 1 run for Wide
+      bowlerPlayer.runs += 1;
+      if (additionalRuns > 0) {
+        match.score[battingTeamKey].runs += additionalRuns;
+        bowlerPlayer.runs += additionalRuns;
+        if (additionalRuns === 4 || additionalRuns === 6) {
+          strikerPlayer.balls += 1;
+          if (additionalRuns === 4) strikerPlayer.fours += 1;
+          if (additionalRuns === 6) strikerPlayer.sixes += 1;
+        }
+        if (additionalRuns % 2 === 1) {
+          [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
+            match.currentBatsmen.nonStriker,
+            match.currentBatsmen.striker,
+          ];
+        }
+      }
+      ballEvent.extraRuns = 1;
+      ballEvent.additionalRuns = additionalRuns;
+      // No increment to overs or legal deliveries
+    } else if (event === 'No Ball') { // No Ball
+      match.score[battingTeamKey].runs += 1; // Base 1 run for No Ball
+      bowlerPlayer.runs += 1;
+      if (additionalRuns > 0) {
+        match.score[battingTeamKey].runs += additionalRuns;
+        bowlerPlayer.runs += additionalRuns;
+        strikerPlayer.balls += 1; // Batsman faces the No Ball
         if (additionalRuns === 4) strikerPlayer.fours += 1;
         if (additionalRuns === 6) strikerPlayer.sixes += 1;
+        if (additionalRuns % 2 === 1) {
+          [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
+            match.currentBatsmen.nonStriker,
+            match.currentBatsmen.striker,
+          ];
+        }
       }
-      bowlerPlayer.runs += totalRuns;
-      ballEvent.extraRuns = totalRuns;
-
-      if (additionalRuns && additionalRuns % 2 === 1) {
-        [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
-          match.currentBatsmen.nonStriker,
-          match.currentBatsmen.striker,
-        ];
-      }
+      ballEvent.extraRuns = 1;
+      ballEvent.additionalRuns = additionalRuns;
+      // No increment to overs or legal deliveries
     } else if (event === 'Wicket') { // Wicket
       match.score[battingTeamKey].wickets += 1;
       match.score[battingTeamKey].overs += 1 / 6;
@@ -288,12 +314,17 @@ router.post('/matches/:id/update', async (req, res) => {
       }
 
       match.currentBatsmen.striker = null;
+      legalDeliveries += 1; // Count as legal delivery
+    } else {
+      return res.status(400).json({ error: `Invalid event type: ${event}` });
     }
 
-    if (currentBall === 6) {
+    // Check for over completion based on legal deliveries only
+    if (legalDeliveries % 6 === 0 && legalDeliveries > 0) {
       match.currentBowler = null;
     }
 
+    // Check match completion
     const totalOvers = match.overs * 6;
     if (match.score[battingTeamKey].overs >= totalOvers || match.score[battingTeamKey].wickets === battingTeam.players.length) {
       match.status = 'completed';
