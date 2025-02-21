@@ -47,7 +47,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
     }
   };
 
-  const updateScore = async (eventValue) => {
+  const updateScore = async (eventValue, extraRuns = 0) => {
     if (!match.currentBatsmen?.striker || !match.currentBowler || !match.currentBatsmen?.nonStriker) {
       setError('All players must be set');
       return;
@@ -60,11 +60,15 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
         bowler: match.currentBowler.name,
       };
       if (eventValue === 'Wicket') {
+        if (!wicketType) {
+          setError('Please select a wicket type');
+          return;
+        }
         eventData.wicketType = wicketType;
         eventData.runsOnWicket = runsOnWicket;
         if (!confirm(`Confirm ${wicketType} wicket for ${match.currentBatsmen.striker.name}?`)) return;
       } else if (['Wide', 'No Ball'].includes(eventValue)) {
-        eventData.additionalRuns = additionalRuns;
+        eventData.additionalRuns = extraRuns; // Use extraRuns directly from prompt
       }
 
       const response = await axios.post(`/api/matches/${matchId}/update`, eventData);
@@ -194,8 +198,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                 onClick={() => {
                   const runs = parseInt(prompt(`Additional runs for ${extra} (0-6):`) || '0');
                   if (runs >= 0 && runs <= 6) {
-                    setAdditionalRuns(runs);
-                    updateScore(extra);
+                    updateScore(extra, runs); // Pass extra runs directly
                   } else {
                     setError('Invalid runs for ' + extra);
                   }
@@ -207,7 +210,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
             ))}
             <Button
               variant="outlined"
-              onClick={() => setWicketType('Bowled')} // Default to trigger wicket UI
+              onClick={() => setWicketType('Bowled')}
               className="bg-red-600 text-white hover:bg-red-700 border-none px-4 py-2 rounded-full"
             >
               Wicket

@@ -41,12 +41,13 @@ function Scoreboard() {
   const nonStriker = match.currentBatsmen?.nonStriker || { name: 'Not set', runs: 0, balls: 0, fours: 0, sixes: 0 };
   const bowler = match.currentBowler || { name: 'Not set', overs: 0, runs: 0, wickets: 0 };
 
-  const formatOvers = (overs) => {
-    const totalBalls = Math.round(overs * 6);
-    const over = Math.floor(totalBalls / 6);
-    const ballInOver = totalBalls % 6;
-    return `${over}.${ballInOver}`;
-  };
+ // Inside Scoreboard.jsx, update formatOvers:
+const formatOvers = (overs) => {
+  const totalBalls = Math.round(overs * 6); // Legal balls only
+  const over = Math.floor(totalBalls / 6);
+  const ballInOver = totalBalls % 6;
+  return `${over}.${ballInOver}`;
+};
 
   return (
     <div className="p-6 bg-gradient-to-r from-blue-900 to-gray-900 min-h-screen text-white">
