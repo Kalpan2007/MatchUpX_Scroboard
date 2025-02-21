@@ -21,18 +21,18 @@ router.get('/teams', async (req, res) => {
 
 // Schedule a match with manual toss decision, starting at 0-0
 router.post('/matches', async (req, res) => {
-  const { team1, team2, overs, tossWinner } = req.body;
-  if (!tossWinner || (tossWinner !== team1 && tossWinner !== team2)) {
-    return res.status(400).json({ error: 'Invalid toss winner. Must be one of the teams.' });
+  const { team1, team2, overs } = req.body;
+  if (!team1 || !team2 || !overs) {
+    return res.status(400).json({ error: 'Team1, Team2, and overs are required' });
   }
-  const currentBattingTeam = tossWinner === team1 ? 'team1' : 'team2';
+
   const match = new Match({
     team1,
     team2,
     overs,
-    toss: tossWinner,
-    currentBattingTeam,
-    status: 'in-progress',
+    toss: null, // No toss yet
+    currentBattingTeam: null, // Admin will decide later
+    status: 'scheduled', // Start as scheduled
     score: {
       team1: { runs: 0, wickets: 0, overs: 0, players: [] },
       team2: { runs: 0, wickets: 0, overs: 0, players: [] },
@@ -71,24 +71,20 @@ router.get('/matches', async (req, res) => {
 router.patch('/matches/:id', async (req, res) => {
   console.log('PATCH /api/matches/:id called with body:', req.body);
   try {
-    const { toss, currentBattingTeam } = req.body;
+    const { currentBattingTeam } = req.body;
     const match = await Match.findById(req.params.id).populate('team1 team2');
 
     if (!match) return res.status(404).json({ error: 'Match not found' });
-
-    const team1Name = match.team1.name;
-    const team2Name = match.team2.name;
-    if (!toss || (toss !== team1Name && toss !== team2Name)) {
-      return res.status(400).json({ error: 'Invalid toss winner. Must be one of the teams.' });
-    }
     if (!currentBattingTeam || (currentBattingTeam !== 'team1' && currentBattingTeam !== 'team2')) {
-      return res.status(400).json({ error: 'Invalid batting team. Must be team1 or team2.' });
+      return res.status(400).json({ error: 'currentBattingTeam must be "team1" or "team2"' });
+    }
+    if (match.currentBattingTeam) {
+      return res.status(400).json({ error: 'Batting team already decided' });
     }
 
-    match.toss = toss;
     match.currentBattingTeam = currentBattingTeam;
+    match.toss = currentBattingTeam === 'team1' ? match.team1._id : match.team2._id;
     match.status = 'in-progress';
-
     await match.save();
     req.io.emit('scoreUpdate', match);
     res.json(match);
@@ -97,7 +93,6 @@ router.patch('/matches/:id', async (req, res) => {
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
-
 // Set or update players (flexible selection: striker, bowler, or non-striker in any order)
 router.post('/matches/:id/setPlayers', async (req, res) => {
   console.log('Set Players request:', req.body);
@@ -229,7 +224,6 @@ router.post('/matches/:id/update', async (req, res) => {
       return res.status(400).json({ error: 'Striker, bowler, or non-striker not found in current match state' });
     }
 
-    // Track legal deliveries separately
     let legalDeliveries = match.ballByBall.filter(b => !['Wide', 'No Ball'].includes(b.event)).length;
 
     if (!isNaN(parseInt(event))) { // Runs (1, 2, 3, 4, 6)
@@ -253,9 +247,9 @@ router.post('/matches/:id/update', async (req, res) => {
           match.currentBatsmen.striker,
         ];
       }
-      legalDeliveries += 1; // Count as legal delivery
+      legalDeliveries += 1;
     } else if (event === 'Wide') { // Wide
-      match.score[battingTeamKey].runs += 1; // Base 1 run for Wide
+      match.score[battingTeamKey].runs += 1;
       bowlerPlayer.runs += 1;
       if (additionalRuns > 0) {
         match.score[battingTeamKey].runs += additionalRuns;
@@ -274,14 +268,13 @@ router.post('/matches/:id/update', async (req, res) => {
       }
       ballEvent.extraRuns = 1;
       ballEvent.additionalRuns = additionalRuns;
-      // No increment to overs or legal deliveries
     } else if (event === 'No Ball') { // No Ball
-      match.score[battingTeamKey].runs += 1; // Base 1 run for No Ball
+      match.score[battingTeamKey].runs += 1;
       bowlerPlayer.runs += 1;
       if (additionalRuns > 0) {
         match.score[battingTeamKey].runs += additionalRuns;
         bowlerPlayer.runs += additionalRuns;
-        strikerPlayer.balls += 1; // Batsman faces the No Ball
+        strikerPlayer.balls += 1;
         if (additionalRuns === 4) strikerPlayer.fours += 1;
         if (additionalRuns === 6) strikerPlayer.sixes += 1;
         if (additionalRuns % 2 === 1) {
@@ -293,7 +286,6 @@ router.post('/matches/:id/update', async (req, res) => {
       }
       ballEvent.extraRuns = 1;
       ballEvent.additionalRuns = additionalRuns;
-      // No increment to overs or legal deliveries
     } else if (event === 'Wicket') { // Wicket
       match.score[battingTeamKey].wickets += 1;
       match.score[battingTeamKey].overs += 1 / 6;
@@ -314,17 +306,20 @@ router.post('/matches/:id/update', async (req, res) => {
       }
 
       match.currentBatsmen.striker = null;
-      legalDeliveries += 1; // Count as legal delivery
+      legalDeliveries += 1;
     } else {
       return res.status(400).json({ error: `Invalid event type: ${event}` });
     }
 
-    // Check for over completion based on legal deliveries only
+    // Check for over completion and rotate strike
     if (legalDeliveries % 6 === 0 && legalDeliveries > 0) {
       match.currentBowler = null;
+      [match.currentBatsmen.striker, match.currentBatsmen.nonStriker] = [
+        match.currentBatsmen.nonStriker,
+        match.currentBatsmen.striker,
+      ];
     }
 
-    // Check match completion
     const totalOvers = match.overs * 6;
     if (match.score[battingTeamKey].overs >= totalOvers || match.score[battingTeamKey].wickets === battingTeam.players.length) {
       match.status = 'completed';

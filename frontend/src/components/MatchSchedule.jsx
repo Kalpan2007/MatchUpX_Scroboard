@@ -26,31 +26,31 @@ function MatchSchedule() {
   const createFixedSchedule = async () => {
     const teams = await axios.get('/api/teams').then(res => res.data);
     if (teams.length !== 4) return alert('Expected 4 teams');
-
+  
     const schedule = [];
     const teamIds = teams.map(t => t._id);
     const startDate = new Date('2025-02-25T14:00:00Z');
-
-    // Fixed round-robin schedule for 4 teams (6 matches)
+  
     const pairings = [
-      [teamIds[0], teamIds[1]], // Divine Debuggers vs Unity Nexus
-      [teamIds[2], teamIds[3]], // The Elite Titans vs The Skibidi Rizzlers
-      [teamIds[0], teamIds[2]], // Divine Debuggers vs The Elite Titans
-      [teamIds[1], teamIds[3]], // Unity Nexus vs The Skibidi Rizzlers
-      [teamIds[0], teamIds[3]], // Divine Debuggers vs The Skibidi Rizzlers
-      [teamIds[1], teamIds[2]]  // Unity Nexus vs The Elite Titans
+      [teamIds[0], teamIds[1]],
+      [teamIds[2], teamIds[3]],
+      [teamIds[0], teamIds[2]],
+      [teamIds[1], teamIds[3]],
+      [teamIds[0], teamIds[3]],
+      [teamIds[1], teamIds[2]]
     ];
-
+  
     pairings.forEach((pair, index) => {
       const matchDate = new Date(startDate);
       matchDate.setDate(startDate.getDate() + index);
+      // Admin decides batting team (example: alternate for simplicity, or add UI for choice)
+      const battingTeam = index % 2 === 0 ? 'team1' : 'team2';
       schedule.push({
         team1: pair[0],
         team2: pair[1],
         overs: 20,
-        toss: null,
-        currentBattingTeam: null,
-        status: 'scheduled',
+        battingTeam, // New field
+        status: 'in-progress',
         score: { team1: { runs: 0, wickets: 0, overs: 0, players: [] }, team2: { runs: 0, wickets: 0, overs: 0, players: [] } },
         ballByBall: [],
         currentPartnership: { runs: 0, balls: 0 },
@@ -59,7 +59,7 @@ function MatchSchedule() {
         date: matchDate,
       });
     });
-
+  
     await Promise.all(schedule.map(match => axios.post('/api/matches', match)));
     setMatches(await axios.get('/api/matches').then(res => res.data));
   };

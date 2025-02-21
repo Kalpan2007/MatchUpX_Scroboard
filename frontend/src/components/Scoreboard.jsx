@@ -41,13 +41,44 @@ function Scoreboard() {
   const nonStriker = match.currentBatsmen?.nonStriker || { name: 'Not set', runs: 0, balls: 0, fours: 0, sixes: 0 };
   const bowler = match.currentBowler || { name: 'Not set', overs: 0, runs: 0, wickets: 0 };
 
- // Inside Scoreboard.jsx, update formatOvers:
-const formatOvers = (overs) => {
-  const totalBalls = Math.round(overs * 6); // Legal balls only
-  const over = Math.floor(totalBalls / 6);
-  const ballInOver = totalBalls % 6;
-  return `${over}.${ballInOver}`;
-};
+  const formatOvers = (overs) => {
+    const totalBalls = Math.round(overs * 6);
+    const over = Math.floor(totalBalls / 6);
+    const ballInOver = totalBalls % 6;
+    return `${over}.${ballInOver}`;
+  };
+
+  if (!match.currentBattingTeam) {
+    return (
+      <div className="p-6 bg-gradient-to-r from-blue-900 to-gray-900 min-h-screen text-white">
+        <h1 className="text-4xl font-extrabold mb-4 text-center text-yellow-400 shadow-text">{match.team1.name} vs {match.team2.name}</h1>
+        <p className="text-lg text-center text-gray-300 mb-6">Please decide the batting team in the admin panel.</p>
+        <button
+          onClick={() => setShowPasswordPrompt(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-semibold transition duration-300 mx-auto block"
+        >
+          Open Admin Panel
+        </button>
+        {showPasswordPrompt && (
+          <PasswordPrompt
+            onSuccess={() => {
+              setShowPasswordPrompt(false);
+              setShowAdminPanel(true);
+            }}
+            onClose={() => setShowPasswordPrompt(false)}
+          />
+        )}
+        {showAdminPanel && (
+          <AdminControls
+            match={match}
+            matchId={matchId}
+            setMatch={setMatch}
+            onClose={() => setShowAdminPanel(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-gradient-to-r from-blue-900 to-gray-900 min-h-screen text-white">
