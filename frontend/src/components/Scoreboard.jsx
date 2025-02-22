@@ -25,8 +25,14 @@ function Scoreboard() {
 
     socket.on('scoreUpdate', (data) => {
       if (data._id === matchId) {
-        setMatch(data);
-        console.log('Match updated via socket:', data);
+        console.log('Received score update:', data); // Debug log
+        setMatch(prevMatch => {
+          if (JSON.stringify(prevMatch) !== JSON.stringify(data)) {
+            console.log('Updating match state:', data);
+            return { ...data }; // Force re-render with new object
+          }
+          return prevMatch;
+        });
       }
     });
 
@@ -45,17 +51,17 @@ function Scoreboard() {
     const totalBalls = Math.round(overs * 6);
     const over = Math.floor(totalBalls / 6);
     const ballInOver = totalBalls % 6;
-    return `${over}.${ballInOver}`;
+    return `${over}.${ballInOver === 0 ? '0' : ballInOver}`;
   };
 
   if (!match.currentBattingTeam) {
     return (
-      <div className="p-6 bg-gradient-to-r from-blue-900 to-gray-900 min-h-screen text-white">
-        <h1 className="text-4xl font-extrabold mb-4 text-center text-yellow-400 shadow-text">{match.team1.name} vs {match.team2.name}</h1>
-        <p className="text-lg text-center text-gray-300 mb-6">Please decide the batting team in the admin panel.</p>
+      <div className="p-6 bg-[#0A1A2E] min-h-screen text-white flex flex-col items-center justify-center">
+        <h1 className="text-3xl font-bold mb-4 text-center text-yellow-400">Match Not Started</h1>
+        <p className="text-lg text-center text-gray-300 mb-6">Please select the batting team in the admin panel to start the match.</p>
         <button
           onClick={() => setShowPasswordPrompt(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-semibold transition duration-300 mx-auto block"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-semibold transition duration-300"
         >
           Open Admin Panel
         </button>
@@ -81,46 +87,39 @@ function Scoreboard() {
   }
 
   return (
-    <div className="p-6 bg-gradient-to-r from-blue-900 to-gray-900 min-h-screen text-white">
-      <h1 className="text-4xl font-extrabold mb-4 text-center text-yellow-400 shadow-text">{match.team1.name} vs {match.team2.name}</h1>
-      <p className="mb-6 text-lg text-center text-gray-300">Toss: {match.toss} | Batting: <span className="text-green-400">{battingTeam.name}</span></p>
-      <div className="grid grid-cols-2 gap-8 mb-8">
-        <div className="bg-gray-800 p-5 rounded-lg shadow-lg border border-blue-500">
-          <p className="font-semibold text-xl text-blue-300">{match.team1.name}:</p>
-          <p className="text-3xl font-bold">{match.score.team1.runs}/{match.score.team1.wickets} <span className="text-sm">({formatOvers(match.score.team1.overs)} overs)</span></p>
-          {match.score.team1.players.filter(p => p.runs > 0 || p.balls > 0).map(player => (
-            <p key={player.name} className="text-sm text-gray-300 mt-1">
-              {player.name}: {player.runs}/{player.balls} ({player.fours}/{player.sixes})
-            </p>
-          ))}
+    <div className="p-6 bg-[#0A1A2E] min-h-screen text-white">
+      <h1 className="text-3xl font-bold mb-6 text-center text-yellow-400">Match Scoreboard</h1>
+      <p className="mb-6 text-center text-gray-300">Toss: {match.toss ? (match.toss === match.team1._id ? match.team1.name : match.team2.name) : 'Not decided'} | Batting: <span className="text-green-400">{battingTeam.name}</span></p>
+
+      {/* Match Info and Current Players */}
+      <div className="max-w-4xl mx-auto bg-[#1A2D46] p-6 rounded-lg shadow-lg space-y-4">
+        {/* Team Scores */}
+        <div className="flex justify-between text-xl font-bold text-gray-300 mb-4">
+          <span>{battingTeam.name}: {match.score[battingTeam === match.team1 ? 'team1' : 'team2'].runs}/{match.score[battingTeam === match.team1 ? 'team1' : 'team2'].wickets} ({formatOvers(match.score[battingTeam === match.team1 ? 'team1' : 'team2'].overs)} ov)</span>
+          <span>{bowlingTeam.name}: {match.score[bowlingTeam === match.team1 ? 'team1' : 'team2'].runs}/{match.score[bowlingTeam === match.team1 ? 'team1' : 'team2'].wickets} ({formatOvers(match.score[bowlingTeam === match.team1 ? 'team1' : 'team2'].overs)} ov)</span>
         </div>
-        <div className="bg-gray-800 p-5 rounded-lg shadow-lg border border-blue-500">
-          <p className="font-semibold text-xl text-blue-300">{match.team2.name}:</p>
-          <p className="text-3xl font-bold">{match.score.team2.runs}/{match.score.team2.wickets} <span className="text-sm">({formatOvers(match.score.team2.overs)} overs)</span></p>
-          {match.score.team2.players.filter(p => p.runs > 0 || p.balls > 0).map(player => (
-            <p key={player.name} className="text-sm text-gray-300 mt-1">
-              {player.name}: {player.runs}/{player.balls} ({player.fours}/{player.sixes})
-            </p>
-          ))}
+
+        {/* Current Players and Stats */}
+        <div className="space-y-3">
+          <p className="text-gray-300">Partnership: <span className="text-yellow-400">{match.currentPartnership.runs} ({match.currentPartnership.balls} balls)</span></p>
+          <p className="text-gray-300">Striker: <span className="text-green-400">{striker.name}</span> - {striker.runs}/{striker.balls}</p>
+          <p className="text-gray-300">Non-Striker: <span className="text-green-400">{nonStriker.name}</span> - {nonStriker.runs}/{nonStriker.balls}</p>
+          <p className="text-gray-300">
+            Bowler: <span className="text-red-400">{bowler.name}</span> - {formatOvers(bowler.overs || 0)} {bowler.wickets || 0} {bowler.runs || 0}
+          </p>
+          <p className="text-gray-300">Current Over: <span className="text-blue-400">{formatOvers(match.score[match.currentBattingTeam].overs)}</span></p>
         </div>
-      </div>
-      <div className="mb-8 bg-gray-800 p-5 rounded-lg shadow-lg">
-        <p className="text-gray-300">Partnership: <span className="text-yellow-400">{match.currentPartnership.runs} runs ({match.currentPartnership.balls} balls)</span></p>
-        <p className="text-gray-300">Striker: <span className="text-green-400">{striker.name}</span> - {striker.runs}/{striker.balls} ({striker.fours}/{striker.sixes})</p>
-        <p className="text-gray-300">Non-Striker: <span className="text-green-400">{nonStriker.name}</span> - {nonStriker.runs}/{nonStriker.balls} ({nonStriker.fours}/{nonStriker.sixes})</p>
-        <p className="text-gray-300">
-          Bowler: <span className="text-red-400">{bowler.name}</span> - {(typeof bowler.overs === 'number' ? bowler.overs : 0).toFixed(1)} overs, {bowler.runs || 0} runs, {bowler.wickets || 0} wickets
-        </p>
-        <p className="text-gray-300">Current Over: <span className="text-blue-400">{formatOvers(match.score[match.currentBattingTeam].overs)}</span></p>
-        <div id="ballHistory" className="flex gap-2 mt-2 flex-wrap">
+
+        <div id="ballHistory" className="flex gap-2 mt-5 flex-wrap">
           {match.ballByBall.slice(-10).map((ball, index) => (
             <span key={index} className="bg-blue-600 text-white px-2 py-1 rounded-full text-sm">{ball.event}{ball.extraRuns > 0 ? `+${ball.extraRuns}` : ''}</span>
           ))}
         </div>
       </div>
+
       <button
         onClick={() => setShowPasswordPrompt(true)}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-semibold transition duration-300"
+        className="mt-10 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-semibold transition duration-300 mx-auto block"
       >
         Update Score
       </button>
@@ -141,13 +140,6 @@ function Scoreboard() {
           onClose={() => setShowAdminPanel(false)}
         />
       )}
-      <footer
-        id="footer"
-        className="mt-8 text-center text-gray-400 cursor-pointer"
-        onClick={() => window.open('https://github.com/mochatek', '_blank')}
-      >
-        © 2025 Cricket Scoreboard | <span className="text-blue-400 underline hover:text-blue-300">Link to GitHub</span>
-      </footer>
     </div>
   );
 }

@@ -81,31 +81,35 @@ function MatchSchedule() {
     navigate(`/matches/${openTossDialog}`);
   };
 
-  if (loading) return <div className="p-4">Loading matches...</div>;
+  if (loading) return <div className="p-4 text-white">Loading matches...</div>;
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Match Schedule</h1>
+    <div className="p-6 bg-[#0A1A2E] min-h-screen text-white">
+      <h1 className="text-3xl font-bold mb-6 text-center text-yellow-400">Match Schedule</h1>
       <div className="mt-4">
         {matches.length === 0 ? (
-          <p>No matches scheduled yet.</p>
+          <p className="text-gray-300 text-center">No matches scheduled yet.</p>
         ) : (
           matches.map((match) => (
-            <div key={match._id} className="mb-2">
+            <div key={match._id} className="mb-4">
               <Link
                 to={match.currentBattingTeam ? `/matches/${match._id}` : '#'}
-                className={`block p-4 bg-white rounded shadow ${match.currentBattingTeam ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                className={`block p-4 bg-[#1A2D46] rounded-lg shadow-md ${match.currentBattingTeam ? 'hover:bg-[#2A3D5E] cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
               >
-                {match.team1?.name ?? 'Unknown'} vs {match.team2?.name ?? 'Unknown'}
-                <span className="ml-2 text-sm text-gray-500">
+                <p className="text-lg font-semibold">
+                  {match.team1?.name ?? 'Unknown'} vs {match.team2?.name ?? 'Unknown'}
+                </p>
+                <p className="text-gray-300 text-sm">
                   {match.toss ? `(Toss: ${match.toss}, Batting: ${match.currentBattingTeam === 'team1' ? match.team1.name : match.team2.name})` : '(Toss pending)'}
-                </span>
+                </p>
+                <p className="text-gray-300 text-sm">Date: {new Date(match.date).toLocaleString()}</p>
+                <p className="text-gray-300 text-sm">Overs: {match.overs}</p>
               </Link>
               {!match.currentBattingTeam && (
                 <Button
                   variant="contained"
                   onClick={() => setOpenTossDialog(match._id)}
-                  className="mt-2"
+                  className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-semibold transition duration-300"
                   sx={{ textTransform: 'none' }}
                 >
                   Set Toss & Batting Team
@@ -115,36 +119,37 @@ function MatchSchedule() {
           ))
         )}
       </div>
-      <div className="mt-4">
+      <div className="mt-6">
         <Button
           variant="contained"
           onClick={createFixedSchedule}
           disabled={matches.length > 0}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-semibold transition duration-300"
         >
           Create Fixed Schedule
         </Button>
       </div>
 
-      <Dialog open={!!openTossDialog} onClose={() => setOpenTossDialog(null)}>
-        <DialogTitle>Set Toss & Batting Team</DialogTitle>
+      <Dialog open={!!openTossDialog} onClose={() => setOpenTossDialog(null)} PaperProps={{ style: { backgroundColor: '#1A2D46', color: 'white' } }}>
+        <DialogTitle className="text-white">Set Toss & Batting Team</DialogTitle>
         <DialogContent>
-          <FormControl sx={{ minWidth: 200, mt: 2 }}>
-            <InputLabel>Batting Team</InputLabel>
-            <Select value={selectedBattingTeam} onChange={(e) => setSelectedBattingTeam(e.target.value)}>
+          <FormControl sx={{ minWidth: 200, mt: 2 }} className="bg-[#1A2D46] text-white rounded">
+            <InputLabel className="text-white">Batting Team</InputLabel>
+            <Select value={selectedBattingTeam} onChange={(e) => setSelectedBattingTeam(e.target.value)} className="text-white">
               {matches.find(m => m._id === openTossDialog) && [
                 matches.find(m => m._id === openTossDialog).team1.name,
                 matches.find(m => m._id === openTossDialog).team2.name,
               ].map(teamName => (
-                <MenuItem key={teamName} value={teamName}>{teamName}</MenuItem>
+                <MenuItem key={teamName} value={teamName} className="text-white">{teamName}</MenuItem>
               ))}
             </Select>
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleTossDecision} variant="contained" sx={{ textTransform: 'none' }}>
+          <Button onClick={handleTossDecision} variant="contained" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-semibold transition duration-300" sx={{ textTransform: 'none' }}>
             Confirm
           </Button>
-          <Button onClick={() => setOpenTossDialog(null)} variant="outlined" sx={{ textTransform: 'none' }}>
+          <Button onClick={() => setOpenTossDialog(null)} variant="outlined" className="bg-[#1A2D46] text-white hover:bg-[#2A3D5E] border border-white px-4 py-2 rounded-full transition duration-300" sx={{ textTransform: 'none' }}>
             Cancel
           </Button>
         </DialogActions>

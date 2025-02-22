@@ -14,6 +14,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
   const [needsNewStriker, setNeedsNewStriker] = useState(false);
   const [needsNewBowler, setNeedsNewBowler] = useState(false);
   const [needsNewNonStriker, setNeedsNewNonStriker] = useState(false);
+  const [isTeamDecided, setIsTeamDecided] = useState(!!match.currentBattingTeam);
 
   const battingTeam = match.currentBattingTeam === 'team1' ? match.team1 : match.team2;
   const bowlingTeam = match.currentBattingTeam === 'team1' ? match.team2 : match.team1;
@@ -25,6 +26,9 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
       setNeedsNewStriker(!match.currentBatsmen?.striker);
       setNeedsNewNonStriker(!match.currentBatsmen?.nonStriker && match.currentBatsmen?.striker);
       setNeedsNewBowler(!match.currentBowler || (match.ballByBall.filter(b => !['Wide', 'No Ball'].includes(b.event)).length % 6 === 0 && match.ballByBall.length > 0));
+      setIsTeamDecided(true);
+    } else {
+      setIsTeamDecided(false);
     }
   }, [match]);
 
@@ -37,6 +41,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
       const response = await axios.patch(`/api/matches/${matchId}`, { currentBattingTeam: selectedBattingTeam });
       setMatch(response.data);
       setSelectedBattingTeam('');
+      setIsTeamDecided(true);
       setError('');
     } catch (err) {
       setError('Failed to set batting team: ' + (err.response?.data?.error || err.message));
@@ -132,6 +137,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
       setNeedsNewStriker(true);
       setNeedsNewBowler(true);
       setNeedsNewNonStriker(true);
+      setIsTeamDecided(false);
       setError('');
     } catch (err) {
       setError('Failed to reset: ' + (err.response?.data?.error || err.message));
@@ -139,16 +145,16 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
   };
 
   return (
-    <div className="mt-6 p-6 bg-gray-800 rounded-lg shadow-xl border border-blue-600">
-      <h2 className="text-2xl font-bold mb-4 text-black">Admin Control Panel</h2>
-      {error && <p className="text-red-400 mb-4 bg-red-900 p-2 rounded">{error}</p>}
+    <div className="mt-6 p-6 bg-[#1A2D46] rounded-lg shadow-xl border border-[#1A2D46]">
+      <h2 className="text-2xl font-bold mb-4 text-white">Admin Control Panel</h2>
+      {error && <p className="text-red-400 mb-4 bg-[#1A2D46] p-2 rounded">{error}</p>}
 
-      {!match.currentBattingTeam ? (
+      {!isTeamDecided ? (
         <div className="mb-4">
-          <p className="text-black mb-2">Select the batting team:</p>
-          <FormControl sx={{ minWidth: 150 }} className="bg-gray-700 text-white rounded">
-            <InputLabel className="text-black">Batting Team</InputLabel>
-            <Select value={selectedBattingTeam} onChange={(e) => setSelectedBattingTeam(e.target.value)} className="text-black">
+          <p className="text-white mb-2">Select the batting team:</p>
+          <FormControl sx={{ minWidth: 150 }} className="bg-[#1A2D46] text-white rounded">
+            <InputLabel className="text-white">Batting Team</InputLabel>
+            <Select value={selectedBattingTeam} onChange={(e) => setSelectedBattingTeam(e.target.value)} className="text-white">
               <MenuItem value="team1">{match.team1.name}</MenuItem>
               <MenuItem value="team2">{match.team2.name}</MenuItem>
             </Select>
@@ -156,7 +162,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
           <Button
             onClick={setBattingTeam}
             variant="contained"
-            className="bg-blue-600 hover:bg-blue-700 ml-4"
+            className="bg-white hover:bg-gray-200 ml-4 text-white border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300"
           >
             Confirm Batting Team
           </Button>
@@ -165,15 +171,15 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
         <>
           {needsNewStriker && (
             <div className="mb-4">
-              <FormControl sx={{ minWidth: 150 }} className="bg-gray-700 text-white rounded">
-                <InputLabel className="text-black">Striker</InputLabel>
-                <Select value={selectedStriker} onChange={(e) => setSelectedStriker(e.target.value)} className="text-black">
+              <FormControl sx={{ minWidth: 150 }} className="bg-[#1A2D46] text-white rounded">
+                <InputLabel className="text-white">Striker</InputLabel>
+                <Select value={selectedStriker} onChange={(e) => setSelectedStriker(e.target.value)} className="text-white">
                   {eligibleBatsmen.map((player) => (
                     <MenuItem key={player.name} value={player.name}>{player.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <Button onClick={() => setPlayers({ striker: selectedStriker })} variant="contained" className="bg-green-600 hover:bg-green-700 ml-4">
+              <Button onClick={() => setPlayers({ striker: selectedStriker })} variant="contained" className="bg-white hover:bg-gray-200 ml-4 text-white border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                 Set Striker
               </Button>
             </div>
@@ -181,15 +187,15 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
 
           {needsNewNonStriker && (
             <div className="mb-4">
-              <FormControl sx={{ minWidth: 150 }} className="bg-gray-700 text-white rounded">
-                <InputLabel className="text-black">Non-Striker</InputLabel>
-                <Select value={selectedNonStriker} onChange={(e) => setSelectedNonStriker(e.target.value)} className="text-black">
+              <FormControl sx={{ minWidth: 150 }} className="bg-[#1A2D46] text-white rounded">
+                <InputLabel className="text-white">Non-Striker</InputLabel>
+                <Select value={selectedNonStriker} onChange={(e) => setSelectedNonStriker(e.target.value)} className="text-white">
                   {eligibleBatsmen.filter(p => p.name !== match.currentBatsmen?.striker?.name).map((player) => (
                     <MenuItem key={player.name} value={player.name}>{player.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <Button onClick={() => setPlayers({ nonStriker: selectedNonStriker })} variant="contained" className="bg-green-600 hover:bg-green-700 ml-4">
+              <Button onClick={() => setPlayers({ nonStriker: selectedNonStriker })} variant="contained" className="bg-white hover:bg-gray-200 ml-4 text-white border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                 Set Non-Striker
               </Button>
             </div>
@@ -197,15 +203,15 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
 
           {needsNewBowler && (
             <div className="mb-4">
-              <FormControl sx={{ minWidth: 150 }} className="bg-gray-700 text-white rounded">
-                <InputLabel className="text-black">Bowler</InputLabel>
-                <Select value={selectedBowler} onChange={(e) => setSelectedBowler(e.target.value)} className="text-black">
+              <FormControl sx={{ minWidth: 150 }} className="bg-[#1A2D46] text-white rounded">
+                <InputLabel className="text-white">Bowler</InputLabel>
+                <Select value={selectedBowler} onChange={(e) => setSelectedBowler(e.target.value)} className="text-white">
                   {eligibleBowlers.map((player) => (
                     <MenuItem key={player.name} value={player.name}>{player.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <Button onClick={() => setPlayers({ bowler: selectedBowler })} variant="contained" className="bg-green-600 hover:bg-green-700 ml-4">
+              <Button onClick={() => setPlayers({ bowler: selectedBowler })} variant="contained" className="bg-white hover:bg-gray-200 ml-4 text-white border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                 Set Bowler
               </Button>
             </div>
@@ -214,9 +220,9 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
           {match.currentBattingTeam && match.currentBatsmen?.striker && match.currentBowler && match.currentBatsmen?.nonStriker && (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-3 gap-4">
-                <p className="text-black">Striker: <span className="text-green-400 font-semibold">{match.currentBatsmen.striker.name}</span></p>
-                <p className="text-black">Non-Striker: <span className="text-green-400 font-semibold">{match.currentBatsmen.nonStriker.name}</span></p>
-                <p className="text-black">Bowler: <span className="text-red-400 font-semibold">{match.currentBowler.name}</span></p>
+                <p className="text-white">Striker: <span className="text-green-400 font-semibold">{match.currentBatsmen.striker.name}</span></p>
+                <p className="text-white">Non-Striker: <span className="text-green-400 font-semibold">{match.currentBatsmen.nonStriker.name}</span></p>
+                <p className="text-white">Bowler: <span className="text-red-400 font-semibold">{match.currentBowler.name}</span></p>
               </div>
               <div className="flex flex-wrap gap-3">
                 {[1, 2, 3, 4, 6].map(run => (
@@ -224,7 +230,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                     key={run}
                     variant="outlined"
                     onClick={() => updateScore(run.toString())}
-                    className="bg-blue-600 text-white hover:bg-blue-700 border-none px-4 py-2 rounded-full"
+                    className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300"
                   >
                     {run} Run
                   </Button>
@@ -241,7 +247,7 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                         setError('Invalid runs for ' + extra);
                       }
                     }}
-                    className="bg-yellow-600 text-white hover:bg-yellow-700 border-none px-4 py-2 rounded-full"
+                    className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300"
                   >
                     {extra}
                   </Button>
@@ -249,16 +255,16 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                 <Button
                   variant="outlined"
                   onClick={() => setWicketType('Bowled')}
-                  className="bg-red-600 text-white hover:bg-red-700 border-none px-4 py-2 rounded-full"
+                  className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300"
                 >
                   Wicket
                 </Button>
               </div>
               {wicketType && (
-                <div className="bg-gray-700 p-4 rounded-lg">
-                  <FormControl sx={{ minWidth: 150, mr: 2 }} className="bg-gray-600 text-white rounded">
-                    <InputLabel className="text-black">Wicket Type</InputLabel>
-                    <Select value={wicketType} onChange={(e) => setWicketType(e.target.value)} className="text-black">
+                <div className="bg-[#1A2D46] p-4 rounded-lg">
+                  <FormControl sx={{ minWidth: 150, mr: 2 }} className="bg-[#1A2D46] text-white rounded">
+                    <InputLabel className="text-white">Wicket Type</InputLabel>
+                    <Select value={wicketType} onChange={(e) => setWicketType(e.target.value)} className="text-white">
                       <MenuItem value="Bowled">Bowled</MenuItem>
                       <MenuItem value="Caught">Caught</MenuItem>
                       <MenuItem value="Run Out">Run Out</MenuItem>
@@ -267,9 +273,9 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                     </Select>
                   </FormControl>
                   {wicketType === 'Run Out' && (
-                    <FormControl sx={{ minWidth: 120 }} className="bg-gray-600 text-white rounded">
-                      <InputLabel className="text-black">Runs on Wicket</InputLabel>
-                      <Select value={runsOnWicket} onChange={(e) => setRunsOnWicket(parseInt(e.target.value))} className="text-black">
+                    <FormControl sx={{ minWidth: 120 }} className="bg-[#1A2D46] text-white rounded">
+                      <InputLabel className="text-white">Runs on Wicket</InputLabel>
+                      <Select value={runsOnWicket} onChange={(e) => setRunsOnWicket(parseInt(e.target.value))} className="text-white">
                         {[0, 1, 2, 3, 4, 6].map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
                       </Select>
                     </FormControl>
@@ -277,20 +283,20 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
                   <Button
                     variant="contained"
                     onClick={() => updateScore('Wicket')}
-                    className="bg-red-600 hover:bg-red-700 ml-4"
+                    className="bg-white hover:bg-gray-200 ml-4 text-white border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300"
                   >
                     Confirm Wicket
                   </Button>
                 </div>
               )}
               <div className="flex gap-3 flex-wrap">
-                <Button variant="outlined" onClick={undoLastBall} className="bg-gray-600 text-white hover:bg-gray-700 border-none px-4 py-2 rounded-full">
+                <Button variant="outlined" onClick={undoLastBall} className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                   Undo Last Ball
                 </Button>
-                <Button variant="outlined" onClick={resetMatch} className="bg-gray-600 text-white hover:bg-gray-700 border-none px-4 py-2 rounded-full">
+                <Button variant="outlined" onClick={resetMatch} className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                   Reset Match
                 </Button>
-                <Button variant="outlined" onClick={onClose} className="bg-gray-600 text-white hover:bg-gray-700 border-none px-4 py-2 rounded-full">
+                <Button variant="outlined" onClick={onClose} className="bg-white text-white hover:bg-gray-200 border border-blue-800 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(0,112,255,0.7)] transition duration-300">
                   Close
                 </Button>
               </div>
@@ -302,4 +308,4 @@ function AdminControls({ match, matchId, setMatch, onClose }) {
   );
 }
 
-export default AdminControls;
+export default AdminControls;                               
